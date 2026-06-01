@@ -1,0 +1,1 @@
+{"operator": "fused_moe", "timestamp": "2026-06-01T20:59:00", "baseline_time_ms": 164.001, "optimized_time_ms": 160.453, "speedup": 1.02, "status": "FAIL", "file": "examples/fused_moe_baseline.cu", "optimization_strategies": ["kernel_fusion", "fused_gating_expert"], "issue": "precision_error_0.59", "needs_fix": true}

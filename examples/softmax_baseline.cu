@@ -65,10 +65,8 @@ __global__ void softmax_optimized(float* input, float* output, int N, int D) {
     float thread_sum = 0.0f;
     for (int i = tid; i < D; i += blockDim.x) {
         float exp_val = expf(row_input[i] - max_val);
-        sdata[i] = exp_val;  // 存储 exp 值以便后续使用
         thread_sum += exp_val;
     }
-    __syncthreads();
 
     // Reduce sum
     sdata[tid] = thread_sum;
@@ -83,9 +81,9 @@ __global__ void softmax_optimized(float* input, float* output, int N, int D) {
     float sum = sdata[0];
     __syncthreads();
 
-    // Phase 3: Normalize
+    // Phase 3: Normalize (重新计算 exp)
     for (int i = tid; i < D; i += blockDim.x) {
-        row_output[i] = sdata[i] / sum;
+        row_output[i] = expf(row_input[i] - max_val) / sum;
     }
 }
 

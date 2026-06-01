@@ -1,0 +1,1 @@
+{"operator": "softmax", "timestamp": "2026-06-01T20:55:00", "baseline_time_ms": 1.334, "optimized_time_ms": 0.103, "speedup": 12.89, "status": "PASS", "file": "examples/softmax_baseline.cu", "optimization_strategies": ["online_algorithm", "shared_memory_reduction", "parallel_reduction"], "ncu_bottleneck": "L1TEX_stall_84.9%", "fix_applied": "removed_sdata_overflow_bug"}

@@ -5,6 +5,7 @@
 #include <math.h>
 
 // Baseline Scan - 并行但效率低（Hillis-Steele 算法）
+// Exclusive scan: output[i] = sum(input[0..i-1])
 __global__ void scan_baseline(float* input, float* output, int N) {
     extern __shared__ float temp[];
 
@@ -19,7 +20,7 @@ __global__ void scan_baseline(float* input, float* output, int N) {
     }
     __syncthreads();
 
-    // Hillis-Steele 算法 - O(n log n) work
+    // Hillis-Steele 算法 - O(n log n) work (inclusive scan)
     for (int stride = 1; stride < blockDim.x; stride *= 2) {
         float val = 0.0f;
         if (tid >= stride) {
@@ -33,9 +34,9 @@ __global__ void scan_baseline(float* input, float* output, int N) {
         __syncthreads();
     }
 
-    // 写回结果
+    // 转换为 exclusive scan: 右移一位，第一个元素为 0
     if (idx < N) {
-        output[idx] = temp[tid];
+        output[idx] = (tid > 0) ? temp[tid - 1] : 0.0f;
     }
 }
 

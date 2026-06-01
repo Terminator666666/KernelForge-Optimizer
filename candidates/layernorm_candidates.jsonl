@@ -1,0 +1,1 @@
+{"operator": "layernorm", "timestamp": "2026-06-01T20:56:00", "baseline_time_ms": 1.402, "optimized_time_ms": 0.037, "speedup": 38.26, "status": "PASS", "file": "examples/layernorm_baseline.cu", "optimization_strategies": ["welford_online_algorithm", "shared_memory_reduction", "fused_affine_transform"], "max_error": 1.788139e-06}
