@@ -6,155 +6,138 @@
 
 ## 🚧 当前实施进度（2026-06-01）
 
-### 总体进度：阶段 1-2 完成，阶段 3 进行中（10%）
+### 总体进度：3 个真实验证的高级算子完成（40%）
+
+**目标**：8 个不同类型的高级 CUDA 算子优化（用于实习简历展示）  
+**GitHub 仓库**：https://github.com/Terminator666666/KernelForge-Optimizer
+
+### ✅ 已完成的算子（3/8）
+
+| 算子 | 加速比 | 矩阵/数据规模 | 精度验证 | 状态 |
+|------|--------|--------------|---------|------|
+| **Transpose** | **26.69x** 🏆 | 4096×4096 | ✅ PASS | 已验证 |
+| **Matrix Multiplication Ultra** | **8.82x** | 4096×4096 | ✅ PASS | 已验证（Tensor Core） |
+| **Reduction** | **2.25x** | 16M 元素 | ✅ PASS | 已验证（公平 baseline） |
+
+**平均加速比**：12.59x  
+**最高加速比**：26.69x (Transpose)  
+**所有精度测试**：✅ PASS
+
+### 🎯 核心改进
+
+1. **公平 Baseline 对比**
+   - ❌ 错误：Naive baseline 使用单线程（串行）
+   - ✅ 正确：Naive baseline 使用多线程并行（grid-stride loop + atomicAdd）
+   - 示例：Reduction 从异常的 2296x 修正为合理的 2.25x
+
+2. **完整的 Agentic Workflow**
+   - ✅ 任务草稿：`docs/reduction-draft.md`
+   - ✅ 候选追踪：`candidates/reduction_candidates.jsonl`
+   - ✅ 证据记录：性能数据、精度验证、拒绝原因
+   - ✅ 问题审计：发现并修复异常加速比
+
+3. **精度验证**
+   - ✅ 所有算子都通过精度验证（误差 < 0.01%）
+   - ✅ 使用 CPU 参考实现对比
+   - ✅ 记录最大误差和平均误差
+
+### 📋 Git 提交历史
+
+**本地提交**：6 个  
+**待推送**：5 个
+
+```
+69615a0 chore: 移除 Vector Add（太简单）
+6dfeb17 feat: 添加 Vector Add 和 Transpose 优化
+225c78b fix: 修复 Reduction baseline，实现完整的 agentic workflow
+be8fced feat: 实现 Reduction 优化，加速比 2296.45x
+6983e2b chore: 更新 .gitignore 排除 NCU 报告文件
+```
+
+### ⏳ 待实现的算子（5/8）
+
+根据用户要求："高级一点的几个算子多来几个，可以选 Fused MoE，DSA 这种"
+
+**计划实现**：
+1. **Softmax** - 激活函数优化
+2. **LayerNorm** - 归一化优化
+3. **Flash Attention** - 注意力机制优化
+4. **Fused MoE** - 混合专家模型优化
+5. **Scan (Prefix Sum)** - 并行扫描优化
+
+**每个算子必须包含**：
+- ✅ 真实的 RTX 5070 性能测试（不要理论估算）
+- ✅ 公平的 baseline 对比（并行 vs 并行）
+- ✅ 精度验证（误差 < 0.01%）
+- ✅ 完整的 agentic workflow（draft + candidates + evidence）
+
+### 🎯 项目亮点（面试展示）
+
+1. **真实性能数据**
+   - 所有加速比都是在 RTX 5070 上真实测试
+   - 不使用理论估算或模拟数据
+   - 公平的 baseline 对比（避免串行 vs 并行的不公平对比）
+
+2. **完整的工程流程**
+   - Agentic workflow（任务草稿、候选追踪、证据记录）
+   - 问题审计（发现并修复异常加速比）
+   - 精度验证（所有算子都通过验证）
+   - Git 版本控制（清晰的提交历史）
+
+3. **高级优化技术**
+   - Tensor Core（FP16 WMMA API）
+   - 共享内存分块（Shared Memory Tiling）
+   - Bank Conflict 避免（+1 padding）
+   - Warp 级归约（Warp-level Reduction）
+
+### 📊 项目统计
+
+- **Python 文件**：80 个（包括 skills）
+- **CUDA 文件**：22 个（包括所有版本）
+- **总代码量**：~5000+ 行
+- **项目大小**：436MB
+- **GPU**：RTX 5070（空闲：61°C, 10W, 13%）
+
+### 🚀 下一步行动
+
+**推送到 GitHub**：
+```bash
+# 需要手动推送（WSL 环境无法交互式输入凭据）
+git push origin main
+```
+
+**继续实现剩余 5 个算子**：
+- 每个算子都需要真实测试和验证
+- 预计需要 2-3 天完成
+
+---
+
+## 🔧 原始设计文档（已归档）
 
 **设计文档**：`docs/superpowers/specs/2026-06-01-kda-alignment-design.md`  
 **实施计划**：`docs/superpowers/plans/2026-06-01-kda-alignment-implementation.md`
 
-### ✅ 阶段 1：基础架构搭建 - 100% 完成
+### 📚 Skills 开发进度（已归档）
 
-**完成时间**：2026-06-01  
-**Git Commits**：5 个
+**注意**：以下是原始的 skills 开发计划，已被实际算子优化工作取代。
 
-| 任务 | 状态 | Commit | 说明 |
-|------|------|--------|------|
-| Task 1.1: 创建目录结构 | ✅ | `9a58a6e` | docs/, prompts/, skills/, examples/ |
-| Task 1.2: 编写工作流文档 | ✅ | `b34eff5` | docs/agent-flow.md (76 行) |
-| Task 1.3: 编写 Prompt 模板 | ✅ | `dd4ff57` | prompts/README.md + kernel-optimization-flow.md (102 行) |
-| Task 1.4: 更新 README | ✅ | `d1bee6a` | 重写为 KDA 风格 |
-| Task 1.5: 更新 CLAUDE.md | ✅ | `ba0fcd8` | 添加 KDA 工作流说明 |
+<details>
+<summary>点击展开查看 Skills 开发历史</summary>
 
-**成果**：
-- ✅ 基础目录结构已创建
-- ✅ CUDA 优化工作流文档已编写
-- ✅ Prompt 模板已编写
-- ✅ README.md 已重写（对齐 KDA）
-- ✅ CLAUDE.md 已更新
+#### ✅ 阶段 1：基础架构搭建 - 100% 完成
+- 基础目录结构、工作流文档、Prompt 模板
+- Git Commits：5 个
 
-### ✅ 阶段 2：ncu-interpreter-skill 实现 - 100% 完成
+#### ✅ 阶段 2：ncu-interpreter-skill 实现 - 100% 完成
+- 总代码量：4141 行
+- 8 个参考文档、4 个 Python 工具、GPU 规格数据库
 
-**完成时间**：2026-06-01  
-**总代码量**：4141 行
+#### ⏳ 阶段 3：strategy-library-skill 实现 - 10% 完成
+- 当前代码量：398 行
+- 已完成：strategy_rules.yaml（9 个优化策略）
+- 待完成：6 个参考文档、5 个 CUDA 模板
 
-| 任务 | 状态 | 说明 |
-|------|------|------|
-| Task 2.1: 创建目录结构 | ✅ | 15 个文件（目录和占位符） |
-| Task 2.2: 编写 SKILL.md 和 README.md | ✅ | 238 行文档 |
-| Task 2.3: 编写参考文档 | ✅ | 8 个文档，共 3054 行 |
-| Task 2.4: 实现 Python 工具 | ✅ | 4 个脚本，共 852 行 |
-| Task 2.5: 准备 GPU 规格数据 | ✅ | gpu_specs.yaml，235 行 |
-
-**已完成文件清单**：
-
-**参考文档**（8 个，3054 行）：
-- ✅ reference/00-overview.md（196 行）- NCU 解释器概述
-- ✅ reference/01-derived-metrics.md（307 行）- 派生指标计算方法
-- ✅ reference/02-memory-analysis.md（380 行）- 内存子系统分析
-- ✅ reference/03-compute-analysis.md（382 行）- 计算子系统分析
-- ✅ reference/04-roofline-model.md（385 行）- Roofline 模型
-- ✅ reference/05-bottleneck-identification.md（452 行）- 瓶颈识别逻辑
-- ✅ reference/06-access-patterns.md（454 行）- 访问模式识别
-- ✅ reference/07-gpu-specs.md（498 行）- GPU 架构规格
-
-**Python 工具**（4 个，852 行）：
-- ✅ helpers/analyze_ncu_report.py（185 行）- NCU 报告解析
-- ✅ helpers/identify_bottleneck.py（184 行）- 瓶颈识别
-- ✅ helpers/detect_access_pattern.py（200 行）- 访问模式检测
-- ✅ helpers/generate_diagnosis.py（283 行）- 生成诊断报告
-
-**数据文件**（1 个，235 行）：
-- ✅ data/gpu_specs.yaml（235 行）- GPU 规格数据库（支持 RTX 50/40/30、H100、A100、V100、T4）
-
-**核心功能**：
-- ✅ 解析 NCU CSV/JSON 报告
-- ✅ 计算 6 个派生指标（带宽利用率、算术强度、占用率等）
-- ✅ 内存子系统分析（缓存命中率、访问模式、效率）
-- ✅ 计算子系统分析（占用率、限制因素、SM 效率）
-- ✅ Roofline 模型分析（memory-bound vs compute-bound）
-- ✅ 瓶颈识别（4 种类型，带置信度）
-- ✅ 访问模式检测（coalesced/strided/mixed/random）
-- ✅ 生成诊断报告和优化建议
-
-### ⏳ 阶段 3：strategy-library-skill 实现 - 10% 完成
-
-**开始时间**：2026-06-01  
-**当前代码量**：398 行
-
-| 任务 | 状态 | 说明 |
-|------|------|------|
-| Task 3.1: 创建目录结构 | ✅ | 15 个文件（目录和占位符） |
-| Task 3.2: 编写 SKILL.md 和 README.md | ✅ | 已完成（从总结中得知） |
-| Task 3.3: 编写策略规则 | ✅ | strategy_rules.yaml，398 行 |
-| Task 3.4: 编写参考文档 | ⏳ 0% | 6 个文档，待完成 |
-| Task 3.5: 编写 CUDA 模板 | ⏳ 0% | 5 个模板，待完成 |
-
-**已完成**：
-- ✅ strategy-library-skill 目录结构（15 个文件）
-- ✅ SKILL.md - 策略库使用说明
-- ✅ README.md - 概述、安装、使用示例
-- ✅ data/strategy_rules.yaml（398 行）- 9 个优化策略的完整定义
-
-**策略规则包含**：
-- ✅ matmul_tiling - 矩阵乘法共享内存分块（2-5× 加速）
-- ✅ reduction_warp_primitives - Warp 级归约（3-8× 加速）
-- ✅ vectorized_memory - 向量化内存访问（1.5-3× 加速）
-- ✅ kernel_fusion - 算子融合（2-4× 加速）
-- ✅ tensor_core - Tensor Core 优化（2-10× 加速）
-- ✅ bank_conflict_free - 避免 Bank Conflict（1.5-3× 加速）
-- ✅ occupancy_tuning - 占用率优化（1.5-4× 加速）
-- ✅ cooperative_groups - 协作组优化（1.2-2× 加速）
-- ✅ persistent_threads - 持久线程优化（2-5× 加速）
-
-**待完成**：
-
-**参考文档**（6 个，预计 1500-2000 行）：
-- ⏳ reference/00-overview.md - 策略库概述
-- ⏳ reference/01-matmul-tiling.md - 矩阵乘法分块详解
-- ⏳ reference/02-reduction-warp.md - Warp 级归约详解
-- ⏳ reference/03-vectorized-memory.md - 向量化访问详解
-- ⏳ reference/04-kernel-fusion.md - 算子融合详解
-- ⏳ reference/05-tensor-core.md - Tensor Core 详解
-
-**CUDA 代码模板**（5 个，预计 1000-1500 行）：
-- ⏳ templates/matmul_tiling.cu - 矩阵乘法分块模板
-- ⏳ templates/reduction_warp.cu - Warp 归约模板
-- ⏳ templates/vectorized_memory.cu - 向量化访问模板
-- ⏳ templates/kernel_fusion.cu - 算子融合模板
-- ⏳ templates/tensor_core.cu - Tensor Core 模板
-
-**预计工作量**：
-- 参考文档：6 个文档，约 1500-2000 行
-- CUDA 模板：5 个模板，约 1000-1500 行
-- 总计：约 2500-3500 行代码
-
-### 📋 后续阶段（待开始）
-
-- ⏳ **阶段 4**：optimization-history-skill 实现（2-3 天）
-- ⏳ **阶段 5**：清理和文档完善（2-3 天）
-- ⏳ **阶段 6**：验证和优化（2-3 天）
-
-### 🎯 下一步行动
-
-**继续阶段 3**：
-1. 完成 Task 3.4：编写 6 个参考文档（详细说明每个优化策略）
-2. 完成 Task 3.5：编写 5 个 CUDA 代码模板（可直接使用的完整代码）
-
-**参考资料**：
-- 策略定义：`skills/strategy-library-skill/data/strategy_rules.yaml`
-- 原始实现：`agents/strategy_templates.py`（约 900 行）
-
-### 📊 统计数据
-
-**总体进度**：
-- ✅ 阶段 1：100%（5 个文件，~500 行）
-- ✅ 阶段 2：100%（13 个文件，4141 行）
-- ⏳ 阶段 3：10%（3 个文件，398 行）
-- **总计**：21 个文件，~5039 行
-
-**预计最终规模**：
-- 阶段 1-3：约 8000-9000 行
-- 阶段 4-6：约 2000-3000 行
-- **项目总计**：约 10000-12000 行
+</details>
 
 ---
 
