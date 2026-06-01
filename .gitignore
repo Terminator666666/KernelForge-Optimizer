@@ -13,3 +13,9 @@ kernels-workspace/
 batch-optimization-workspace/
 complete-optimization-workspace/
 nsight-compute-linux-*.run
+
+# NCU 报告文件（太大，不推送）
+*.ncu-rep
+*.nsys-rep
+*.qdrep
+profile/
