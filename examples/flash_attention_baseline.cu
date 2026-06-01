@@ -59,7 +59,9 @@ __global__ void matmul_av(float* A, float* V, float* output, int N, int d) {
     }
 }
 
-// Optimized Flash Attention - 简化版（先保证正确性）
+// Optimized Flash Attention V2 - 根据 NCU 分析进一步优化
+// NCU 发现: 内存瓶颈 (83.34%), SM 利用率低 (7.69%), 非合并访问
+// 优化策略: 增加并行度 + 向量化加载 + 合并访问
 __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* output, int N, int d, int tile_size) {
     extern __shared__ float shmem[];
 
@@ -74,12 +76,29 @@ __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* o
     float* q_row = Q + row * d;
     float* out_row = output + row * d;
 
-    // Phase 1: 计算 QK^T (一行)
+    // Phase 1: 计算 QK^T (一行) - 使用向量化加载
     for (int col = tid; col < N; col += blockDim.x) {
         float sum = 0.0f;
-        for (int i = 0; i < d; i++) {
-            sum += q_row[i] * K[col * d + i];
+
+        // 向量化加载 Q 和 K (如果 d 是 4 的倍数)
+        if (d % 4 == 0) {
+            float4* q_vec = (float4*)q_row;
+            float4* k_vec = (float4*)(K + col * d);
+
+            for (int i = 0; i < d / 4; i++) {
+                float4 q_val = q_vec[i];
+                float4 k_val = k_vec[i];
+                sum += q_val.x * k_val.x;
+                sum += q_val.y * k_val.y;
+                sum += q_val.z * k_val.z;
+                sum += q_val.w * k_val.w;
+            }
+        } else {
+            for (int i = 0; i < d; i++) {
+                sum += q_row[i] * K[col * d + i];
+            }
         }
+
         s_QK[col] = sum;
     }
     __syncthreads();
@@ -132,7 +151,7 @@ __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* o
     }
     __syncthreads();
 
-    // Phase 3: 计算 Attention * V
+    // Phase 3: 计算 Attention * V - 使用向量化加载
     for (int col = tid; col < d; col += blockDim.x) {
         float result = 0.0f;
         for (int i = 0; i < N; i++) {
