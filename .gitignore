@@ -1,0 +1,15 @@
+# 排除大文件和不必要的文件
+skills/KernelWiki/
+*.bin
+*.ncu-rep
+__pycache__/
+*.pyc
+.coverage
+.env
+test_*
+high_perf_*
+demo-optimization-results/
+kernels-workspace/
+batch-optimization-workspace/
+complete-optimization-workspace/
+nsight-compute-linux-*.run

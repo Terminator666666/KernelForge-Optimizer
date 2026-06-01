@@ -1,0 +1,235 @@
+# GPU Architecture Specifications Database
+# 用于 NCU Interpreter 的 GPU 规格数据
+
+# NVIDIA GeForce RTX 50 Series (Blackwell)
+RTX_5090:
+  name: "RTX 5090"
+  architecture: "Blackwell"
+  compute_capability: 10.0
+  peak_bandwidth_gbps: 1792
+  peak_tflops_fp32: 125.0
+  peak_tflops_fp16: 250.0
+  peak_tflops_tensor: 1000.0
+  sm_count: 170
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400  # 100 KB
+  shared_memory_per_block: 49152  # 48 KB
+  l2_cache_size_mb: 96
+
+RTX_5080:
+  name: "RTX 5080"
+  architecture: "Blackwell"
+  compute_capability: 10.0
+  peak_bandwidth_gbps: 960
+  peak_tflops_fp32: 90.0
+  peak_tflops_fp16: 180.0
+  peak_tflops_tensor: 720.0
+  sm_count: 120
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400
+  shared_memory_per_block: 49152
+  l2_cache_size_mb: 64
+
+# NVIDIA GeForce RTX 40 Series (Ada Lovelace)
+RTX_4090:
+  name: "RTX 4090"
+  architecture: "Ada Lovelace"
+  compute_capability: 8.9
+  peak_bandwidth_gbps: 1008
+  peak_tflops_fp32: 82.6
+  peak_tflops_fp16: 165.2
+  peak_tflops_tensor: 660.6
+  sm_count: 128
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400  # 100 KB
+  shared_memory_per_block: 49152  # 48 KB
+  l2_cache_size_mb: 72
+
+RTX_4080:
+  name: "RTX 4080"
+  architecture: "Ada Lovelace"
+  compute_capability: 8.9
+  peak_bandwidth_gbps: 716
+  peak_tflops_fp32: 48.7
+  peak_tflops_fp16: 97.4
+  peak_tflops_tensor: 389.6
+  sm_count: 76
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400
+  shared_memory_per_block: 49152
+  l2_cache_size_mb: 64
+
+RTX_4070_Ti:
+  name: "RTX 4070 Ti"
+  architecture: "Ada Lovelace"
+  compute_capability: 8.9
+  peak_bandwidth_gbps: 504
+  peak_tflops_fp32: 40.1
+  peak_tflops_fp16: 80.2
+  peak_tflops_tensor: 320.8
+  sm_count: 60
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400
+  shared_memory_per_block: 49152
+  l2_cache_size_mb: 48
+
+RTX_4070:
+  name: "RTX 4070"
+  architecture: "Ada Lovelace"
+  compute_capability: 8.9
+  peak_bandwidth_gbps: 504
+  peak_tflops_fp32: 29.1
+  peak_tflops_fp16: 58.2
+  peak_tflops_tensor: 232.8
+  sm_count: 46
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400
+  shared_memory_per_block: 49152
+  l2_cache_size_mb: 36
+
+# NVIDIA GeForce RTX 30 Series (Ampere)
+RTX_3090:
+  name: "RTX 3090"
+  architecture: "Ampere"
+  compute_capability: 8.6
+  peak_bandwidth_gbps: 936
+  peak_tflops_fp32: 35.6
+  peak_tflops_fp16: 71.0
+  peak_tflops_tensor: 284.0
+  sm_count: 82
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400  # 100 KB
+  shared_memory_per_block: 49152  # 48 KB
+  l2_cache_size_mb: 6
+
+RTX_3080:
+  name: "RTX 3080"
+  architecture: "Ampere"
+  compute_capability: 8.6
+  peak_bandwidth_gbps: 760
+  peak_tflops_fp32: 29.8
+  peak_tflops_fp16: 59.5
+  peak_tflops_tensor: 238.0
+  sm_count: 68
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400
+  shared_memory_per_block: 49152
+  l2_cache_size_mb: 5
+
+RTX_3070:
+  name: "RTX 3070"
+  architecture: "Ampere"
+  compute_capability: 8.6
+  peak_bandwidth_gbps: 448
+  peak_tflops_fp32: 20.3
+  peak_tflops_fp16: 40.6
+  peak_tflops_tensor: 162.6
+  sm_count: 46
+  max_threads_per_sm: 1536
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 102400
+  shared_memory_per_block: 49152
+  l2_cache_size_mb: 4
+
+# NVIDIA Data Center GPUs
+H100:
+  name: "H100"
+  architecture: "Hopper"
+  compute_capability: 9.0
+  peak_bandwidth_gbps: 3350  # HBM3
+  peak_tflops_fp32: 67.0
+  peak_tflops_fp16: 1979.0
+  peak_tflops_tensor: 3958.0
+  sm_count: 132
+  max_threads_per_sm: 2048
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 32
+  registers_per_sm: 65536
+  shared_memory_per_sm: 233472  # 228 KB
+  shared_memory_per_block: 227328  # 222 KB
+  l2_cache_size_mb: 50
+
+A100:
+  name: "A100"
+  architecture: "Ampere"
+  compute_capability: 8.0
+  peak_bandwidth_gbps: 1555  # HBM2e
+  peak_tflops_fp32: 19.5
+  peak_tflops_fp16: 312.0
+  peak_tflops_tensor: 624.0
+  sm_count: 108
+  max_threads_per_sm: 2048
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 32
+  registers_per_sm: 65536
+  shared_memory_per_sm: 167936  # 164 KB
+  shared_memory_per_block: 163840  # 160 KB
+  l2_cache_size_mb: 40
+
+V100:
+  name: "V100"
+  architecture: "Volta"
+  compute_capability: 7.0
+  peak_bandwidth_gbps: 900  # HBM2
+  peak_tflops_fp32: 15.7
+  peak_tflops_fp16: 125.0
+  peak_tflops_tensor: 125.0
+  sm_count: 80
+  max_threads_per_sm: 2048
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 32
+  registers_per_sm: 65536
+  shared_memory_per_sm: 98304  # 96 KB
+  shared_memory_per_block: 49152  # 48 KB
+  l2_cache_size_mb: 6
+
+T4:
+  name: "T4"
+  architecture: "Turing"
+  compute_capability: 7.5
+  peak_bandwidth_gbps: 320
+  peak_tflops_fp32: 8.1
+  peak_tflops_fp16: 65.0
+  peak_tflops_tensor: 260.0
+  sm_count: 40
+  max_threads_per_sm: 1024
+  max_threads_per_block: 1024
+  max_blocks_per_sm: 16
+  registers_per_sm: 65536
+  shared_memory_per_sm: 65536  # 64 KB
+  shared_memory_per_block: 49152  # 48 KB
+  l2_cache_size_mb: 4
+
+# Ridge Point 计算说明
+# Ridge Point = Peak FP32 TFLOPS / Peak Bandwidth (GB/s)
+#
+# 示例：
+# RTX 4090: 82.6 / 1008 ≈ 82 FLOPs/Byte
+# H100: 67.0 / 3350 ≈ 20 FLOPs/Byte
+# A100: 19.5 / 1555 ≈ 13 FLOPs/Byte

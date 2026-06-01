@@ -1,0 +1,398 @@
+# CUDA Optimization Strategy Rules
+# 策略匹配规则和参数选择指南
+
+# 策略定义
+strategies:
+  # 1. 矩阵乘法共享内存分块
+  matmul_tiling:
+    name: "Matrix Multiplication Tiling"
+    description: "使用共享内存分块优化矩阵乘法"
+
+    # 适用条件
+    applicability:
+      operator_types:
+        - matmul
+        - gemm
+      bottleneck_types:
+        - memory_bandwidth
+        - memory_latency
+      min_compute_capability: 3.0
+
+    # 预期效果
+    performance:
+      expected_speedup_min: 2.0
+      expected_speedup_max: 5.0
+      memory_reduction_percent: 50.0
+
+    # 参数规则
+    parameters:
+      TILE_SIZE:
+        type: int
+        candidates: [16, 32, 64, 128]
+        default: 32
+        selection_rules:
+          - "选择能整除矩阵维度的值"
+          - "考虑共享内存限制：TILE_SIZE² × sizeof(float) ≤ 48KB"
+          - "平衡寄存器压力和数据重用"
+        constraints:
+          - "TILE_SIZE × TILE_SIZE ≤ 1024 (max threads per block)"
+
+      BLOCK_SIZE:
+        type: int
+        formula: "TILE_SIZE × TILE_SIZE"
+        constraints:
+          - "≤ 1024"
+
+    # 实现注意事项
+    notes:
+      - "矩阵维度最好能被 TILE_SIZE 整除"
+      - "需要 2 × TILE_SIZE² × sizeof(type) 共享内存"
+      - "适用于方阵和长方阵"
+
+  # 2. Warp 级归约
+  reduction_warp_primitives:
+    name: "Reduction with Warp Primitives"
+    description: "使用 warp shuffle 指令优化归约操作"
+
+    applicability:
+      operator_types:
+        - reduction
+        - sum
+        - max
+        - min
+      bottleneck_types:
+        - memory_latency
+        - occupancy
+      min_compute_capability: 3.0
+
+    performance:
+      expected_speedup_min: 3.0
+      expected_speedup_max: 8.0
+      memory_reduction_percent: 80.0
+
+    parameters:
+      BLOCK_SIZE:
+        type: int
+        candidates: [128, 256, 512, 1024]
+        default: 256
+        selection_rules:
+          - "更大的 block size 提高占用率"
+          - "受寄存器使用限制"
+          - "必须是 32 的倍数（warp size）"
+
+      ELEMENTS_PER_THREAD:
+        type: int
+        candidates: [1, 2, 4, 8, 16]
+        default: 4
+        selection_rules:
+          - "增加以减少 kernel 启动次数"
+          - "注意寄存器压力"
+          - "数组大小 / (BLOCK_SIZE × ELEMENTS_PER_THREAD) = grid size"
+
+    notes:
+      - "需要 compute capability 3.0+ 支持 __shfl_down_sync"
+      - "消除共享内存原子操作"
+      - "适用于大数组归约"
+
+  # 3. 向量化内存访问
+  vectorized_memory:
+    name: "Vectorized Memory Access"
+    description: "使用 float4/int4 向量化内存访问"
+
+    applicability:
+      operator_types:
+        - elementwise
+        - matmul
+        - copy
+      bottleneck_types:
+        - memory_bandwidth
+      min_compute_capability: 3.0
+
+    performance:
+      expected_speedup_min: 1.5
+      expected_speedup_max: 3.0
+      memory_reduction_percent: 0.0
+
+    parameters:
+      VECTOR_SIZE:
+        type: int
+        candidates: [2, 4]
+        default: 4
+        selection_rules:
+          - "使用 4 for float4/int4"
+          - "使用 2 for float2/int2"
+          - "检查内存对齐"
+        constraints:
+          - "数据必须对齐到 VECTOR_SIZE × sizeof(type)"
+          - "数组大小必须是 VECTOR_SIZE 的倍数"
+
+    notes:
+      - "减少内存事务数量"
+      - "需要正确的内存对齐"
+      - "适用于连续内存访问"
+
+  # 4. Kernel Fusion
+  kernel_fusion:
+    name: "Kernel Fusion"
+    description: "合并多个 element-wise 操作为单个 kernel"
+
+    applicability:
+      operator_types:
+        - elementwise
+        - activation
+      bottleneck_types:
+        - memory_bandwidth
+        - kernel_launch_overhead
+      min_compute_capability: 3.0
+
+    performance:
+      expected_speedup_min: 2.0
+      expected_speedup_max: 4.0
+      memory_reduction_percent: 50.0
+
+    parameters:
+      NUM_OPERATIONS:
+        type: int
+        range: [2, 10]
+        selection_rules:
+          - "合并的操作越多，收益越大"
+          - "注意寄存器压力"
+
+    notes:
+      - "减少中间数据传输"
+      - "降低 kernel 启动开销"
+      - "适用于串联的 element-wise 操作"
+
+  # 5. Tensor Core
+  tensor_core:
+    name: "Tensor Core Optimization"
+    description: "使用 Tensor Cores 加速矩阵运算"
+
+    applicability:
+      operator_types:
+        - matmul
+        - conv2d
+        - gemm
+      bottleneck_types:
+        - compute_bound
+      min_compute_capability: 7.0
+
+    performance:
+      expected_speedup_min: 2.0
+      expected_speedup_max: 10.0
+      memory_reduction_percent: 0.0
+
+    parameters:
+      PRECISION:
+        type: string
+        candidates: ["FP16", "BF16", "INT8", "FP8"]
+        default: "FP16"
+        selection_rules:
+          - "FP16: 2-4× 加速，适用于大多数场景"
+          - "BF16: 类似 FP16，更好的数值稳定性"
+          - "INT8: 4-10× 加速，适用于推理"
+          - "FP8: 最高加速，需要 Hopper 架构"
+
+      WMMA_M:
+        type: int
+        candidates: [8, 16]
+        default: 16
+
+      WMMA_N:
+        type: int
+        candidates: [8, 16]
+        default: 16
+
+      WMMA_K:
+        type: int
+        candidates: [4, 8, 16]
+        default: 16
+
+    notes:
+      - "需要 compute capability 7.0+ (Volta)"
+      - "矩阵维度必须是 WMMA 尺寸的倍数"
+      - "FP16/BF16 需要混合精度训练技术"
+
+  # 6. Bank Conflict Free
+  bank_conflict_free:
+    name: "Bank Conflict Free Shared Memory"
+    description: "避免共享内存 bank conflict"
+
+    applicability:
+      operator_types:
+        - transpose
+        - matmul
+        - any_with_shared_memory
+      bottleneck_types:
+        - memory_latency
+      min_compute_capability: 3.0
+
+    performance:
+      expected_speedup_min: 1.5
+      expected_speedup_max: 3.0
+      memory_reduction_percent: 0.0
+
+    parameters:
+      PADDING:
+        type: int
+        candidates: [0, 1, 2]
+        default: 1
+        selection_rules:
+          - "添加 padding 避免 bank conflict"
+          - "通常 +1 即可"
+
+    notes:
+      - "共享内存有 32 个 bank"
+      - "同一 warp 访问同一 bank 会冲突"
+      - "padding 会增加共享内存使用"
+
+  # 7. Occupancy Tuning
+  occupancy_tuning:
+    name: "Occupancy Tuning"
+    description: "优化 SM 占用率"
+
+    applicability:
+      operator_types:
+        - any
+      bottleneck_types:
+        - occupancy
+      min_compute_capability: 3.0
+
+    performance:
+      expected_speedup_min: 1.5
+      expected_speedup_max: 4.0
+      memory_reduction_percent: 0.0
+
+    parameters:
+      BLOCK_SIZE:
+        type: int
+        candidates: [64, 128, 256, 512, 1024]
+        default: 256
+        selection_rules:
+          - "增加 block size 提高占用率"
+          - "受寄存器和共享内存限制"
+
+      MAX_REGISTERS:
+        type: int
+        candidates: [32, 48, 64, 96, 128]
+        selection_rules:
+          - "使用 __launch_bounds__ 限制寄存器"
+          - "减少寄存器使用提高占用率"
+
+    notes:
+      - "高占用率可以隐藏内存延迟"
+      - "但不一定总是更好"
+      - "需要平衡占用率和每线程资源"
+
+  # 8. Cooperative Groups
+  cooperative_groups:
+    name: "Cooperative Groups"
+    description: "使用协作组优化复杂同步"
+
+    applicability:
+      operator_types:
+        - complex_sync
+        - multi_block
+      bottleneck_types:
+        - occupancy
+        - synchronization
+      min_compute_capability: 6.0
+
+    performance:
+      expected_speedup_min: 1.2
+      expected_speedup_max: 2.0
+      memory_reduction_percent: 0.0
+
+    notes:
+      - "提供更灵活的同步机制"
+      - "支持 warp 级、block 级、grid 级同步"
+      - "需要 compute capability 6.0+"
+
+  # 9. Persistent Threads
+  persistent_threads:
+    name: "Persistent Threads"
+    description: "持久线程优化小 kernel"
+
+    applicability:
+      operator_types:
+        - small_kernels
+        - streaming
+      bottleneck_types:
+        - kernel_launch_overhead
+      min_compute_capability: 3.0
+
+    performance:
+      expected_speedup_min: 2.0
+      expected_speedup_max: 5.0
+      memory_reduction_percent: 0.0
+
+    notes:
+      - "减少 kernel 启动开销"
+      - "适用于大量小 kernel"
+      - "需要仔细管理工作分配"
+
+# 策略选择优先级
+selection_priority:
+  # 根据瓶颈类型的优先级
+  memory_bandwidth:
+    - vectorized_memory
+    - kernel_fusion
+    - matmul_tiling
+
+  memory_latency:
+    - matmul_tiling
+    - reduction_warp_primitives
+    - bank_conflict_free
+
+  compute_bound:
+    - tensor_core
+    - occupancy_tuning
+
+  occupancy:
+    - occupancy_tuning
+    - reduction_warp_primitives
+    - cooperative_groups
+
+# GPU 架构特定建议
+gpu_architecture:
+  volta:  # compute capability 7.0
+    compute_capability: 7.0
+    features:
+      - tensor_cores
+      - independent_thread_scheduling
+    recommended_strategies:
+      - tensor_core
+      - matmul_tiling
+
+  ampere:  # compute capability 8.0
+    compute_capability: 8.0
+    features:
+      - improved_tensor_cores
+      - async_copy
+      - large_l2_cache
+    recommended_strategies:
+      - tensor_core
+      - matmul_tiling
+      - vectorized_memory
+
+  ada_lovelace:  # compute capability 8.9
+    compute_capability: 8.9
+    features:
+      - 4th_gen_tensor_cores
+      - huge_l2_cache
+      - shader_execution_reordering
+    recommended_strategies:
+      - tensor_core
+      - matmul_tiling
+      - kernel_fusion
+
+  hopper:  # compute capability 9.0
+    compute_capability: 9.0
+    features:
+      - transformer_engine
+      - fp8_support
+      - thread_block_clusters
+    recommended_strategies:
+      - tensor_core
+      - cooperative_groups
+      - matmul_tiling

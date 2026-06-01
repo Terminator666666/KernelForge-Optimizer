@@ -1,0 +1,91 @@
+🚀 KernelForge 批量优化系统
+================================================================================
+🔍 扫描项目中的 kernel...
+✅ 发现 3 个 kernel
+   - matmul_baseline (matmul, 2.8 KB)
+   - matmul_naive (matmul, 0.8 KB)
+   - vector_add_test (elementwise, 2.1 KB)
+
+进度: 1/3
+
+================================================================================
+优化 Kernel: matmul_baseline
+================================================================================
+
+[1] 编译 Baseline...
+
+[2] 测试 Baseline 性能...
+   Baseline: 4.389 ms, 489.24 GFLOPS
+
+[3] 优化轮次 1...
+   策略: matmul_tiling
+   ✅ 3.610 ms, 594.44 GFLOPS, 加速比: 1.22x
+
+[4] 优化轮次 2...
+   策略: vectorized_memory
+      编译错误: batch-optimization-workspace/matmul/matmul_baseline/round_2.cu(83): error: identifier "uintptr_t" is undefined
+      return ((uintptr_t)ptr % alignment) == 0;
+               ^
+
+batch-optimization-work
+   ❌ 编译失败
+
+进度: 2/3
+
+================================================================================
+优化 Kernel: matmul_naive
+================================================================================
+
+[1] 编译 Baseline...
+      编译错误: /usr/bin/ld: /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/Scrt1.o: in function `_start':
+(.text+0x1b): undefined reference to `main'
+collect2: error: ld returned 1 exit status
+
+
+进度: 3/3
+
+================================================================================
+优化 Kernel: vector_add_test
+================================================================================
+
+[1] 编译 Baseline...
+
+[2] 测试 Baseline 性能...
+   Baseline: 0.033 ms, 0.00 GFLOPS
+
+[3] 优化轮次 1...
+   策略: kernel_fusion
+   ⚠️  无法计算加速比
+
+[4] 优化轮次 2...
+   策略: vectorized_memory
+      编译错误: batch-optimization-workspace/elementwise/vector_add_test/round_2.cu(83): error: identifier "uintptr_t" is undefined
+      return ((uintptr_t)ptr % alignment) == 0;
+               ^
+
+batch-optimization
+   ❌ 编译失败
+
+================================================================================
+📊 批量优化总结报告
+================================================================================
+
+总计: 3 个 kernel
+  成功: 2
+  失败: 1
+
+✅ 成功优化的 kernel:
+  Kernel                         Baseline(ms)    Best(ms)        加速比        策略                  
+  ------------------------------ --------------- --------------- ---------- --------------------
+  matmul_baseline                4.389           3.610           1.22      x matmul_tiling       
+  vector_add_test                0.033           0.000           1.00      x kernel_fusion       
+
+  平均加速比: 1.11x
+
+❌ 失败的 kernel:
+  - matmul_naive: baseline_compile_failed
+
+💾 报告已保存: batch-optimization-workspace/BATCH_OPTIMIZATION_REPORT.json
+💾 Markdown 报告已保存: batch-optimization-workspace/OPTIMIZATION_REPORT.md
+
+✅ 批量优化完成！

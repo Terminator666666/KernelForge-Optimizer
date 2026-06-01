@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-06-01 18:15:50",
+  "results": [
+    {
+      "speedup": 7.51,
+      "naive_time": 35.802,
+      "optimized_time": 4.769,
+      "output": "Matrix size: 2048x2048x2048\n\nPerformance Comparison:\n  Naive version:       35.802 ms, 479.86 GFLOPS\n  Tensor Core version: 4.769 ms, 3602.77 GFLOPS\n  Speedup:             7.51x\n\nVerification:\n  Max difference: 0.025452\n  Error count (>0.1): 0 / 4194304\n  Result: PASS\n",
+      "kernel": "matmul_tensor_core.cu"
+    },
+    {
+      "speedup": null,
+      "naive_time": null,
+      "optimized_time": null,
+      "output": "Matrix size: 1024x1024x1024\nAverage time: 4.446 ms\nGFLOPS: 482.98\nResult: PASS (h_C[0]=254.138046, expected=254.138062)\n",
+      "kernel": "matmul_baseline.cu"
+    },
+    {
+      "speedup": null,
+      "naive_time": null,
+      "optimized_time": null,
+      "output": "Average time: 0.027 ms\nResult: PASS\n",
+      "kernel": "vector_add_test.cu"
+    }
+  ]
+}
