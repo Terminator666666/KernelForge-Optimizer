@@ -41,7 +41,7 @@ __global__ void conv2d_baseline(float* input, float* kernel, float* output,
     output[n * K * H * W + k * H * W + h * W + w] = sum;
 }
 
-// Optimized Conv2D V2 - 增加每个线程的工作量 + 向量化
+// Optimized Conv2D V3 - 极致优化：向量化 + 展开循环 + 优化内存访问
 __global__ void conv2d_optimized(float* input, float* kernel, float* output,
                                   int N, int C, int H, int W, int K, int R, int S) {
     extern __shared__ float shmem[];
@@ -69,18 +69,73 @@ __global__ void conv2d_optimized(float* input, float* kernel, float* output,
 
         float sum = 0.0f;
 
-        // 对每个输入通道和 kernel 位置求和
-        for (int c = 0; c < C; c++) {
-            for (int r = 0; r < R; r++) {
-                for (int s = 0; s < S; s++) {
-                    int h_in = h + r - R/2;
-                    int w_in = w + s - S/2;
+        // 对每个输入通道和 kernel 位置求和（展开 3x3 kernel）
+        if (R == 3 && S == 3) {
+            // 展开 3x3 卷积循环
+            for (int c = 0; c < C; c++) {
+                int base_idx = n * C * H * W + c * H * W;
 
-                    // 边界检查
-                    if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W) {
-                        float in_val = input[n * C * H * W + c * H * W + h_in * W + w_in];
-                        float ker_val = s_kernel[c * R * S + r * S + s];
-                        sum += in_val * ker_val;
+                // 手动展开 3x3 循环
+                int h_in, w_in;
+
+                // r=0, s=0
+                h_in = h - 1; w_in = w - 1;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 0];
+
+                // r=0, s=1
+                h_in = h - 1; w_in = w;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 1];
+
+                // r=0, s=2
+                h_in = h - 1; w_in = w + 1;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 2];
+
+                // r=1, s=0
+                h_in = h; w_in = w - 1;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 3];
+
+                // r=1, s=1
+                h_in = h; w_in = w;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 4];
+
+                // r=1, s=2
+                h_in = h; w_in = w + 1;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 5];
+
+                // r=2, s=0
+                h_in = h + 1; w_in = w - 1;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 6];
+
+                // r=2, s=1
+                h_in = h + 1; w_in = w;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 7];
+
+                // r=2, s=2
+                h_in = h + 1; w_in = w + 1;
+                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W)
+                    sum += input[base_idx + h_in * W + w_in] * s_kernel[c * 9 + 8];
+            }
+        } else {
+            // 通用版本
+            for (int c = 0; c < C; c++) {
+                for (int r = 0; r < R; r++) {
+                    for (int s = 0; s < S; s++) {
+                        int h_in = h + r - R/2;
+                        int w_in = w + s - S/2;
+
+                        if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W) {
+                            float in_val = input[n * C * H * W + c * H * W + h_in * W + w_in];
+                            float ker_val = s_kernel[c * R * S + r * S + s];
+                            sum += in_val * ker_val;
+                        }
                     }
                 }
             }
