@@ -59,14 +59,13 @@ __global__ void matmul_av(float* A, float* V, float* output, int N, int d) {
     }
 }
 
-// Optimized Flash Attention V2 - 根据 NCU 分析进一步优化
-// NCU 发现: 内存瓶颈 (83.34%), SM 利用率低 (7.69%), 非合并访问
-// 优化策略: 增加并行度 + 向量化加载 + 合并访问
+// Optimized Flash Attention V3 - 极致优化：优化 tile size + 减少同步
 __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* output, int N, int d, int tile_size) {
     extern __shared__ float shmem[];
 
     // 共享内存布局
     float* s_QK = shmem;  // N (存储一行的 QK^T 结果)
+    float* s_max = s_QK + N;  // 256 (用于归约)
 
     int row = blockIdx.x;
     int tid = threadIdx.x;
@@ -81,7 +80,7 @@ __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* o
         float sum = 0.0f;
 
         // 向量化加载 Q 和 K (如果 d 是 4 的倍数)
-        if (d % 4 == 0) {
+        if (d % 4 == 0 && d >= 4) {
             float4* q_vec = (float4*)q_row;
             float4* k_vec = (float4*)(K + col * d);
 
@@ -103,28 +102,38 @@ __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* o
     }
     __syncthreads();
 
-    // Phase 2: Softmax
-    // Find max
+    // Phase 2: Softmax - 优化归约
+    // Find max (使用 warp shuffle 优化)
     float thread_max = -INFINITY;
     for (int i = tid; i < N; i += blockDim.x) {
         thread_max = fmaxf(thread_max, s_QK[i]);
     }
 
-    // Reduce max (使用 warp shuffle 或共享内存)
-    __shared__ float s_max[256];
-    s_max[tid] = thread_max;
-    __syncthreads();
-
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            s_max[tid] = fmaxf(s_max[tid], s_max[tid + s]);
-        }
-        __syncthreads();
+    // Warp-level reduction for max
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        thread_max = fmaxf(thread_max, __shfl_down_sync(0xffffffff, thread_max, offset));
     }
-    float max_val = s_max[0];
+
+    // 每个 warp 的第一个线程写入共享内存
+    if (tid % 32 == 0) {
+        s_max[tid / 32] = thread_max;
+    }
     __syncthreads();
 
-    // Compute exp and sum
+    // 第一个 warp 归约所有 warp 的结果
+    if (tid < 32) {
+        float val = (tid < (blockDim.x / 32)) ? s_max[tid] : -INFINITY;
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            val = fmaxf(val, __shfl_down_sync(0xffffffff, val, offset));
+        }
+        if (tid == 0) {
+            s_max[0] = val;
+        }
+    }
+    __syncthreads();
+    float max_val = s_max[0];
+
+    // Compute exp and sum (使用 warp shuffle 优化)
     float thread_sum = 0.0f;
     for (int i = tid; i < N; i += blockDim.x) {
         float exp_val = expf(s_QK[i] - max_val);
@@ -132,18 +141,29 @@ __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* o
         thread_sum += exp_val;
     }
 
-    // Reduce sum
-    s_max[tid] = thread_sum;
+    // Warp-level reduction for sum
+    for (int offset = 16; offset > 0; offset >>= 1) {
+        thread_sum += __shfl_down_sync(0xffffffff, thread_sum, offset);
+    }
+
+    // 每个 warp 的第一个线程写入共享内存
+    if (tid % 32 == 0) {
+        s_max[tid / 32] = thread_sum;
+    }
     __syncthreads();
 
-    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            s_max[tid] += s_max[tid + s];
+    // 第一个 warp 归约所有 warp 的结果
+    if (tid < 32) {
+        float val = (tid < (blockDim.x / 32)) ? s_max[tid] : 0.0f;
+        for (int offset = 16; offset > 0; offset >>= 1) {
+            val += __shfl_down_sync(0xffffffff, val, offset);
         }
-        __syncthreads();
+        if (tid == 0) {
+            s_max[0] = val;
+        }
     }
-    float sum = s_max[0];
     __syncthreads();
+    float sum = s_max[0];
 
     // Normalize
     for (int i = tid; i < N; i += blockDim.x) {
