@@ -41,24 +41,19 @@ __global__ void conv2d_baseline(float* input, float* kernel, float* output,
     output[n * K * H * W + k * H * W + h * W + w] = sum;
 }
 
-// Optimized Conv2D - 使用共享内存
+// Optimized Conv2D V2 - 增加每个线程的工作量 + 向量化
 __global__ void conv2d_optimized(float* input, float* kernel, float* output,
                                   int N, int C, int H, int W, int K, int R, int S) {
     extern __shared__ float shmem[];
 
     // 共享内存布局
-    int tile_size = blockDim.x;
-    float* s_input = shmem;  // tile_size * C
-    float* s_kernel = s_input + tile_size * C;  // C * R * S
+    float* s_kernel = shmem;  // C * R * S
 
     int n = blockIdx.z;
     int k = blockIdx.y;
     int hw = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (n >= N || k >= K) return;
-
-    int h = hw / W;
-    int w = hw % W;
 
     // 加载 kernel 到共享内存（每个 block 加载一次）
     int kernel_size = C * R * S;
@@ -67,28 +62,32 @@ __global__ void conv2d_optimized(float* input, float* kernel, float* output,
     }
     __syncthreads();
 
-    if (hw >= H * W) return;
+    // 每个线程处理多个输出元素（增加工作量）
+    for (int hw_idx = hw; hw_idx < H * W; hw_idx += blockDim.x * gridDim.x) {
+        int h = hw_idx / W;
+        int w = hw_idx % W;
 
-    float sum = 0.0f;
+        float sum = 0.0f;
 
-    // 对每个输入通道和 kernel 位置求和
-    for (int c = 0; c < C; c++) {
-        for (int r = 0; r < R; r++) {
-            for (int s = 0; s < S; s++) {
-                int h_in = h + r - R/2;
-                int w_in = w + s - S/2;
+        // 对每个输入通道和 kernel 位置求和
+        for (int c = 0; c < C; c++) {
+            for (int r = 0; r < R; r++) {
+                for (int s = 0; s < S; s++) {
+                    int h_in = h + r - R/2;
+                    int w_in = w + s - S/2;
 
-                // 边界检查
-                if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W) {
-                    float in_val = input[n * C * H * W + c * H * W + h_in * W + w_in];
-                    float ker_val = s_kernel[c * R * S + r * S + s];
-                    sum += in_val * ker_val;
+                    // 边界检查
+                    if (h_in >= 0 && h_in < H && w_in >= 0 && w_in < W) {
+                        float in_val = input[n * C * H * W + c * H * W + h_in * W + w_in];
+                        float ker_val = s_kernel[c * R * S + r * S + s];
+                        sum += in_val * ker_val;
+                    }
                 }
             }
         }
-    }
 
-    output[n * K * H * W + k * H * W + h * W + w] = sum;
+        output[n * K * H * W + k * H * W + h * W + w] = sum;
+    }
 }
 
 // CPU 参考实现
@@ -203,9 +202,9 @@ int main() {
     cudaMemcpy(h_output_baseline, d_output, output_size, cudaMemcpyDeviceToHost);
 
     // ========== Optimized ==========
-    printf("[2/3] 测试 Optimized Conv2D (共享内存)...\n");
+    printf("[2/3] 测试 Optimized Conv2D (共享内存 + 增加工作量)...\n");
 
-    int shmem_size = (blockSize * C + C * R * S) * sizeof(float);
+    int shmem_size = (C * R * S) * sizeof(float);
 
     // Warmup
     for (int i = 0; i < 3; i++) {

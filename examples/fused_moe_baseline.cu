@@ -79,7 +79,7 @@ __global__ void weighted_combine(float* expert_outputs, float* gate_scores, floa
     }
 }
 
-// Optimized Fused MoE - 简化版（先保证正确性）
+// Optimized Fused MoE V2 - 优化计算模式
 __global__ void fused_moe_optimized(float* input, float* gate_weights, float* expert_weights,
                                     float* output, int N, int d, int num_experts, int top_k) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -89,13 +89,31 @@ __global__ void fused_moe_optimized(float* input, float* gate_weights, float* ex
     float* x = input + idx * d;
     float* out = output + idx * d;
 
-    // Phase 1: 计算 gate scores
+    // Phase 1: 计算 gate scores（优化：向量化）
     float gate_scores[8];  // 假设最多 8 个 experts
+
     for (int e = 0; e < num_experts; e++) {
         float score = 0.0f;
-        for (int i = 0; i < d; i++) {
-            score += x[i] * gate_weights[e * d + i];
+
+        // 向量化加载（如果 d 是 4 的倍数）
+        if (d % 4 == 0) {
+            float4* x_vec = (float4*)x;
+            float4* gate_vec = (float4*)(gate_weights + e * d);
+
+            for (int i = 0; i < d / 4; i++) {
+                float4 x_val = x_vec[i];
+                float4 g_val = gate_vec[i];
+                score += x_val.x * g_val.x;
+                score += x_val.y * g_val.y;
+                score += x_val.z * g_val.z;
+                score += x_val.w * g_val.w;
+            }
+        } else {
+            for (int i = 0; i < d; i++) {
+                score += x[i] * gate_weights[e * d + i];
+            }
         }
+
         gate_scores[e] = score;
     }
 
@@ -115,15 +133,31 @@ __global__ void fused_moe_optimized(float* input, float* gate_weights, float* ex
         gate_scores[e] /= sum;
     }
 
-    // Phase 2: 融合 expert 计算和加权组合
+    // Phase 2: 融合 expert 计算和加权组合（优化：向量化）
     for (int i = 0; i < d; i++) {
         float result = 0.0f;
 
         for (int e = 0; e < num_experts; e++) {
             // 计算 expert e 的输出的第 i 个维度
             float expert_out_i = 0.0f;
-            for (int j = 0; j < d; j++) {
-                expert_out_i += x[j] * expert_weights[e * d * d + i * d + j];
+
+            // 向量化加载（如果 d 是 4 的倍数）
+            if (d % 4 == 0) {
+                float4* x_vec = (float4*)x;
+                float4* expert_vec = (float4*)(expert_weights + e * d * d + i * d);
+
+                for (int j = 0; j < d / 4; j++) {
+                    float4 x_val = x_vec[j];
+                    float4 w_val = expert_vec[j];
+                    expert_out_i += x_val.x * w_val.x;
+                    expert_out_i += x_val.y * w_val.y;
+                    expert_out_i += x_val.z * w_val.z;
+                    expert_out_i += x_val.w * w_val.w;
+                }
+            } else {
+                for (int j = 0; j < d; j++) {
+                    expert_out_i += x[j] * expert_weights[e * d * d + i * d + j];
+                }
             }
 
             // 加权累加
