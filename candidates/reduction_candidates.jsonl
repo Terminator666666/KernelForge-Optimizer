@@ -1,0 +1,47 @@
+[
+  {
+    "id": "candidate-1",
+    "name": "reduction_naive_serial",
+    "description": "Serial reduction with 1 thread",
+    "status": "rejected",
+    "reason": "Unfair baseline - serial implementation, not parallel",
+    "time_ms": 740.559,
+    "bandwidth_gbs": 0.09,
+    "speedup": 2296.45,
+    "correctness": "pass",
+    "note": "This is NOT a fair comparison - artificially inflates speedup"
+  },
+  {
+    "id": "candidate-2",
+    "name": "reduction_naive_parallel",
+    "description": "Fair parallel baseline with atomicAdd",
+    "status": "baseline",
+    "parent": null,
+    "time_ms": 0.736,
+    "bandwidth_gbs": 91.14,
+    "config": "1024 blocks × 256 threads",
+    "correctness": "pass",
+    "error_percent": 0.0,
+    "note": "Fair baseline using grid-stride loop + atomicAdd"
+  },
+  {
+    "id": "candidate-3",
+    "name": "reduction_optimized_shmem",
+    "description": "Shared memory + warp-level reduction",
+    "status": "promoted",
+    "parent": "candidate-2",
+    "time_ms": 0.328,
+    "bandwidth_gbs": 204.87,
+    "config": "32768 blocks × 256 threads",
+    "speedup": 2.25,
+    "correctness": "pass",
+    "error_percent": 0.0,
+    "optimizations": [
+      "Shared memory tiling",
+      "Warp-level reduction",
+      "Each thread processes 2 elements",
+      "Avoid warp divergence"
+    ],
+    "note": "Realistic 2.25x speedup with fair baseline"
+  }
+]
