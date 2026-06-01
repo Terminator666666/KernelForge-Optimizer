@@ -41,12 +41,12 @@ __global__ void gating_network(float* input, float* gate_weights, float* gate_sc
 }
 
 __global__ void expert_computation(float* input, float* expert_weights, float* expert_outputs,
-                                   int N, int d, int expert_id) {
+                                   int N, int d, int expert_id, int num_experts) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx < N) {
         float* x = input + idx * d;
-        float* out = expert_outputs + idx * NUM_EXPERTS * d + expert_id * d;
+        float* out = expert_outputs + idx * num_experts * d + expert_id * d;
 
         // 简单的线性变换: out = x * W_expert
         for (int i = 0; i < d; i++) {
@@ -79,11 +79,9 @@ __global__ void weighted_combine(float* expert_outputs, float* gate_scores, floa
     }
 }
 
-// Optimized Fused MoE - 融合 Gating + Top-K + Expert 计算
+// Optimized Fused MoE - 简化版（先保证正确性）
 __global__ void fused_moe_optimized(float* input, float* gate_weights, float* expert_weights,
                                     float* output, int N, int d, int num_experts, int top_k) {
-    extern __shared__ float shmem[];
-
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= N) return;
@@ -91,39 +89,33 @@ __global__ void fused_moe_optimized(float* input, float* gate_weights, float* ex
     float* x = input + idx * d;
     float* out = output + idx * d;
 
-    // 共享内存布局
-    float* s_gate_scores = shmem;  // num_experts
-    float* s_expert_out = s_gate_scores + num_experts;  // d
-
-    // Phase 1: 计算 gate scores (融合)
+    // Phase 1: 计算 gate scores
+    float gate_scores[8];  // 假设最多 8 个 experts
     for (int e = 0; e < num_experts; e++) {
         float score = 0.0f;
         for (int i = 0; i < d; i++) {
             score += x[i] * gate_weights[e * d + i];
         }
-        s_gate_scores[e] = score;
+        gate_scores[e] = score;
     }
 
     // Softmax over experts
-    float max_score = s_gate_scores[0];
+    float max_score = gate_scores[0];
     for (int e = 1; e < num_experts; e++) {
-        max_score = fmaxf(max_score, s_gate_scores[e]);
+        max_score = fmaxf(max_score, gate_scores[e]);
     }
 
     float sum = 0.0f;
     for (int e = 0; e < num_experts; e++) {
-        s_gate_scores[e] = expf(s_gate_scores[e] - max_score);
-        sum += s_gate_scores[e];
+        gate_scores[e] = expf(gate_scores[e] - max_score);
+        sum += gate_scores[e];
     }
 
     for (int e = 0; e < num_experts; e++) {
-        s_gate_scores[e] /= sum;
+        gate_scores[e] /= sum;
     }
 
-    // Phase 2: Top-K selection (简化版：使用所有 experts)
-    // 在实际实现中，这里会选择 top-k 个 experts
-
-    // Phase 3: 融合 expert 计算和加权组合
+    // Phase 2: 融合 expert 计算和加权组合
     for (int i = 0; i < d; i++) {
         float result = 0.0f;
 
@@ -135,7 +127,7 @@ __global__ void fused_moe_optimized(float* input, float* gate_weights, float* ex
             }
 
             // 加权累加
-            result += s_gate_scores[e] * expert_out_i;
+            result += gate_scores[e] * expert_out_i;
         }
 
         out[i] = result;
@@ -267,7 +259,7 @@ int main() {
     for (int i = 0; i < 3; i++) {
         gating_network<<<gridSize, blockSize>>>(d_input, d_gate_weights, d_gate_scores, N, d, num_experts);
         for (int e = 0; e < num_experts; e++) {
-            expert_computation<<<gridSize, blockSize>>>(d_input, d_expert_weights, d_expert_outputs, N, d, e);
+            expert_computation<<<gridSize, blockSize>>>(d_input, d_expert_weights, d_expert_outputs, N, d, e, num_experts);
         }
         weighted_combine<<<gridSize, blockSize>>>(d_expert_outputs, d_gate_scores, d_output, N, d, num_experts);
     }
@@ -278,7 +270,7 @@ int main() {
     for (int i = 0; i < 10; i++) {
         gating_network<<<gridSize, blockSize>>>(d_input, d_gate_weights, d_gate_scores, N, d, num_experts);
         for (int e = 0; e < num_experts; e++) {
-            expert_computation<<<gridSize, blockSize>>>(d_input, d_expert_weights, d_expert_outputs, N, d, e);
+            expert_computation<<<gridSize, blockSize>>>(d_input, d_expert_weights, d_expert_outputs, N, d, e, num_experts);
         }
         weighted_combine<<<gridSize, blockSize>>>(d_expert_outputs, d_gate_scores, d_output, N, d, num_experts);
     }

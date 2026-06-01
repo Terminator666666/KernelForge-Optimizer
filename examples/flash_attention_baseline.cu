@@ -59,91 +59,86 @@ __global__ void matmul_av(float* A, float* V, float* output, int N, int d) {
     }
 }
 
-// Optimized Flash Attention - 融合 kernel + Tiling
+// Optimized Flash Attention - 简化版（先保证正确性）
 __global__ void flash_attention_optimized(float* Q, float* K, float* V, float* output, int N, int d, int tile_size) {
     extern __shared__ float shmem[];
 
     // 共享内存布局
-    float* s_Q = shmem;                          // tile_size x d
-    float* s_K = s_Q + tile_size * d;           // tile_size x d
-    float* s_V = s_K + tile_size * d;           // tile_size x d
-    float* s_QK = s_V + tile_size * d;          // tile_size x tile_size
+    float* s_QK = shmem;  // N (存储一行的 QK^T 结果)
 
-    int row = blockIdx.x * tile_size + threadIdx.y;
-    int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
 
-    // 初始化输出累加器
-    float acc[32];  // 假设 d <= 32
-    for (int i = 0; i < d; i++) {
-        acc[i] = 0.0f;
+    if (row >= N) return;
+
+    float* q_row = Q + row * d;
+    float* out_row = output + row * d;
+
+    // Phase 1: 计算 QK^T (一行)
+    for (int col = tid; col < N; col += blockDim.x) {
+        float sum = 0.0f;
+        for (int i = 0; i < d; i++) {
+            sum += q_row[i] * K[col * d + i];
+        }
+        s_QK[col] = sum;
+    }
+    __syncthreads();
+
+    // Phase 2: Softmax
+    // Find max
+    float thread_max = -INFINITY;
+    for (int i = tid; i < N; i += blockDim.x) {
+        thread_max = fmaxf(thread_max, s_QK[i]);
     }
 
-    float row_max = -INFINITY;
-    float row_sum = 0.0f;
+    // Reduce max (使用 warp shuffle 或共享内存)
+    __shared__ float s_max[256];
+    s_max[tid] = thread_max;
+    __syncthreads();
 
-    // Tiling over K and V
-    for (int tile = 0; tile < (N + tile_size - 1) / tile_size; tile++) {
-        int k_start = tile * tile_size;
-
-        // 加载 Q tile (只需加载一次)
-        if (tile == 0 && threadIdx.x < d && row < N) {
-            s_Q[threadIdx.y * d + threadIdx.x] = Q[row * d + threadIdx.x];
-        }
-
-        // 加载 K tile
-        int k_row = k_start + threadIdx.y;
-        if (threadIdx.x < d && k_row < N) {
-            s_K[threadIdx.y * d + threadIdx.x] = K[k_row * d + threadIdx.x];
-        }
-
-        // 加载 V tile
-        if (threadIdx.x < d && k_row < N) {
-            s_V[threadIdx.y * d + threadIdx.x] = V[k_row * d + threadIdx.x];
-        }
-        __syncthreads();
-
-        // 计算 QK^T for this tile
-        if (row < N && threadIdx.x < tile_size) {
-            int col = k_start + threadIdx.x;
-            if (col < N) {
-                float sum = 0.0f;
-                for (int i = 0; i < d; i++) {
-                    sum += s_Q[threadIdx.y * d + i] * s_K[threadIdx.x * d + i];
-                }
-                s_QK[threadIdx.y * tile_size + threadIdx.x] = sum;
-
-                // 在线 Softmax: 更新 max
-                row_max = fmaxf(row_max, sum);
-            }
-        }
-        __syncthreads();
-
-        // 在线 Softmax: 计算 exp 和 sum
-        if (row < N && threadIdx.x < tile_size) {
-            int col = k_start + threadIdx.x;
-            if (col < N) {
-                float exp_val = expf(s_QK[threadIdx.y * tile_size + threadIdx.x] - row_max);
-                s_QK[threadIdx.y * tile_size + threadIdx.x] = exp_val;
-                row_sum += exp_val;
-            }
-        }
-        __syncthreads();
-
-        // 累加到输出 (融合 Softmax 和 matmul)
-        if (row < N && threadIdx.x < d) {
-            for (int k = 0; k < tile_size; k++) {
-                int col = k_start + k;
-                if (col < N) {
-                    acc[threadIdx.x] += s_QK[threadIdx.y * tile_size + k] * s_V[k * d + threadIdx.x];
-                }
-            }
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            s_max[tid] = fmaxf(s_max[tid], s_max[tid + s]);
         }
         __syncthreads();
     }
+    float max_val = s_max[0];
+    __syncthreads();
 
-    // 归一化并写回
-    if (row < N && threadIdx.x < d) {
-        output[row * d + threadIdx.x] = acc[threadIdx.x] / row_sum;
+    // Compute exp and sum
+    float thread_sum = 0.0f;
+    for (int i = tid; i < N; i += blockDim.x) {
+        float exp_val = expf(s_QK[i] - max_val);
+        s_QK[i] = exp_val;
+        thread_sum += exp_val;
+    }
+
+    // Reduce sum
+    s_max[tid] = thread_sum;
+    __syncthreads();
+
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            s_max[tid] += s_max[tid + s];
+        }
+        __syncthreads();
+    }
+    float sum = s_max[0];
+    __syncthreads();
+
+    // Normalize
+    for (int i = tid; i < N; i += blockDim.x) {
+        s_QK[i] /= sum;
+    }
+    __syncthreads();
+
+    // Phase 3: 计算 Attention * V
+    for (int col = tid; col < d; col += blockDim.x) {
+        float result = 0.0f;
+        for (int i = 0; i < N; i++) {
+            result += s_QK[i] * V[i * d + col];
+        }
+        out_row[col] = result;
     }
 }
 
